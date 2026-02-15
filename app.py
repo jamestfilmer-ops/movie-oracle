@@ -1,10 +1,8 @@
-from datetime import datetime
-import time
-import streamlit as st
-import pandas as pd
-import requests
+import math
 import random
-
+import requests
+import pandas as pd
+import streamlit as st
 
 # --- CONFIG ---
 TMDB_API_KEY = "a20688a723e8c7dd1bef2c2cf21ea3eb"
@@ -31,87 +29,243 @@ questions = [
     ("APP", "Primary platform.", ["Netflix", "Prime", "Max", "Apple TV"]),
     ("AI", "Logic mode.", ["Apply Memory", "Fresh Start"])
 ]
-# Keyword/tag mappings for soft matching (expand as needed)
-match_keywords = {
-    "MOOD": {
-        "Uplifting": ["inspiring", "heartwarming", "joy", "hope", "feel good", "positive"],
-        "Cynical": ["dark", "sarcastic", "bitter", "nihilistic", "cynical"],
-        "Reflective": ["introspective", "thought-provoking", "philosophical", "meditation", "existential"],
-        "Tense": ["suspenseful", "thrilling", "nerve-wracking", "anxious", "edge-of-seat"]
-    },
-    "PACING": {
-        "Fast": ["fast-paced", "action-packed", "rapid", "high-octane"],
-        "Balanced": ["well-paced", "steady"],
-        "Slow Burn": ["slow", "deliberate", "atmospheric", "methodical", "builds gradually"]
-    },
-    "VISUALS": {
-        "Vibrant": ["colorful", "vivid", "bright", "saturated"],
-        "Gritty": ["raw", "realistic", "dirty", "grimy", "handheld"],
-        "Neon": ["cyberpunk", "synthwave", "neon-lit", "retro-futuristic"],
-        "Noir": ["shadowy", "black and white", "monochrome", "venetian blinds", "femme fatale"]
-    },
-    "DEPTH": {
-        "Linear": ["straightforward", "simple plot"],
-        "Engaging": ["twists", "layered"],
-        "Mind-Bending": ["complex", "puzzle", "non-linear", "mindfuck", " Inception-like", "philosophical"]
-    },
-    "HEART": {
-        "Heavy": ["emotional", "heartbreaking", "tragic", "trauma"],
-        "Light": ["fun", "breezy", "feel-good"],
-        "Neutral": []
-    },
-    "THEME": {
-        "Growth": ["coming-of-age", "self-discovery", "redemption", "personal growth"],
-        "Power": ["ambition", "corruption", "dominance", "control"],
-        "Justice": ["revenge", "moral", "right vs wrong", "law"],
-        "Connection": ["love", "friendship", "family", "relationship", "human bond"]
-    },
-    # Hard-ish filters (used with higher weight or exact match)
-    "ERA": {
-        "Classic": lambda y: y <= 1960,
-        "Golden Age": lambda y: 1960 < y <= 1980,
-        "Modern": lambda y: 1980 < y <= 2000,
-        "Contemporary": lambda y: y > 2000
-    },
-    "RUNTIME": {
-        "Short": lambda r: r <= 90,
-        "Standard": lambda r: 90 < r <= 130,
-        "Epic": lambda r: r > 130
-    },
-    "RATING": {  # Maturity (approximate via certification)
-        "Family": ["G", "PG", "TV-G", "TV-Y"],
-        "Teen": ["PG-13", "TV-14", "12"],
-        "Adult": ["R", "NC-17", "TV-MA", "18"]
-    }
-}
 
-# Genre mapping (your GENRE answers → TMDB genre names/ids)
-genre_map = {
-    "Sci-Fi": ["Science Fiction", "sci-fi"],
-    "Drama": ["Drama"],
-    "Comedy": ["Comedy"],
-    "Thriller": ["Thriller", "Mystery", "Crime"]
-}
+# --- STREAMLIT PAGE CONFIG & CSS ---
 st.set_page_config(page_title="Oracle", layout="wide")
-style = "<style>header {visibility: hidden;} footer {visibility: hidden;} #MainMenu {visibility: hidden;} .stApp {background-color: #000000; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;} .block-container {display: flex; justify-content: center; align-items: center; height: 100vh; max-width: 1000px !important; margin: auto;} .apple-card {background: #1c1c1e; border-radius: 32px; padding: 60px; text-align: center; box-shadow: 0 30px 60px rgba(0,0,0,0.5); border: 1px solid #3a3a3c; width: 100%;} h1 {color: #ffffff !important; font-size: 48px !important; font-weight: 700 !important; letter-spacing: -1.5px !important; margin-bottom: 10px !important;} h2 {color: #86868b !important; font-size: 24px !important; font-weight: 500 !important; margin-bottom: 40px !important;} .stButton>button {background: #ffffff; color: #000000; border-radius: 980px; padding: 12px 30px; font-size: 18px; font-weight: 600; border: none; width: 220px; margin-top: 20px;} .result-card {background: #1c1c1e; border-radius: 24px; padding: 30px; margin-bottom: 20px; border: 1px solid #3a3a3c; text-align: left;}</style>"
+
+style = """
+<style>
+header {visibility: hidden;}
+footer {visibility: hidden;}
+#MainMenu {visibility: hidden;}
+.stApp {
+    background-color: #000000;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+.block-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    max-width: 1000px !important;
+    margin: auto;
+}
+.apple-card {
+    background: #1c1c1e;
+    border-radius: 32px;
+    padding: 60px;
+    text-align: center;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+    border: 1px solid #3a3a3c;
+    width: 100%;
+}
+h1 {
+    color: #ffffff !important;
+    font-size: 48px !important;
+    font-weight: 700 !important;
+    letter-spacing: -1.5px !important;
+    margin-bottom: 10px !important;
+}
+h2 {
+    color: #86868b !important;
+    font-size: 24px !important;
+    font-weight: 500 !important;
+    margin-bottom: 40px !important;
+}
+.stButton>button {
+    background: #ffffff;
+    color: #000000;
+    border-radius: 980px;
+    padding: 12px 30px;
+    font-size: 18px;
+    font-weight: 600;
+    border: none;
+    width: 220px;
+    margin-top: 20px;
+}
+.result-card {
+    background: #1c1c1e;
+    border-radius: 24px;
+    padding: 30px;
+    margin-bottom: 20px;
+    border: 1px solid #3a3a3c;
+    text-align: left;
+}
+</style>
+"""
 st.markdown(style, unsafe_allow_html=True)
 
+# --- TMDB HELPERS ---
 def get_clean_meta(name, year):
-    url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={name}&year={year}"
+    # Falls back gracefully if TMDB is unreachable
+    base_search = "https://api.themoviedb.org/3/search/movie"
+    base_movie = "https://api.themoviedb.org/3/movie"
     try:
-        res = requests.get(url).json()
-        if res.get('results'):
-            m_id = res['results'][0]['id']
-            full_url = f"https://api.themoviedb.org/3/movie/{m_id}?api_key={TMDB_API_KEY}&append_to_response=images,watch/providers,release_dates&include_image_language=en,null"
-            return requests.get(full_url).json()
-    except: return None
+        search_params = {
+            "api_key": TMDB_API_KEY,
+            "query": str(name),
+            "year": int(year) if not pd.isna(year) else ""
+        }
+        res = requests.get(base_search, params=search_params, timeout=8)
+        res_json = res.json()
+        if res_json.get("results"):
+            m_id = res_json["results"][0]["id"]
+            movie_params = {
+                "api_key": TMDB_API_KEY,
+                "append_to_response": "images,watch/providers,release_dates",
+                "include_image_language": "en,null"
+            }
+            full = requests.get(f"{base_movie}/{m_id}", params=movie_params, timeout=8)
+            return full.json()
+    except Exception:
+        return None
     return None
 
-if 'step' not in st.session_state: st.session_state.step = 0
-if 'answers' not in st.session_state: st.session_state.answers = {}
+# --- SCORING HELPERS ---
+def safe_get(row, col):
+    # small guard to avoid KeyError
+    try:
+        return row[col]
+    except Exception:
+        return None
 
+def map_era(year, era_choice):
+    try:
+        if pd.isna(year):
+            return 0
+        year = int(year)
+    except Exception:
+        return 0
+    if era_choice == "Classic":
+        return 1 if year < 1960 else 0
+    if era_choice == "Golden Age":
+        return 1 if 1960 <= year < 1985 else 0
+    if era_choice == "Modern":
+        return 1 if 1985 <= year < 2010 else 0
+    if era_choice == "Contemporary":
+        return 1 if year >= 2010 else 0
+    return 0
+
+def map_runtime(runtime, rt_choice):
+    try:
+        if pd.isna(runtime):
+            return 0
+        runtime = float(runtime)
+    except Exception:
+        return 0
+    if rt_choice == "Short":
+        return 1 if runtime < 95 else 0
+    if rt_choice == "Standard":
+        return 1 if 95 <= runtime <= 130 else 0
+    if rt_choice == "Epic":
+        return 1 if runtime > 130 else 0
+    return 0
+
+def map_language(lang_field, lang_choice):
+    if not isinstance(lang_field, str):
+        return 0
+    lang = lang_field.lower()
+    if lang_choice == "English":
+        return 1 if "english" in lang or lang in ("en", "eng") else 0
+    if lang_choice == "International":
+        return 0 if "english" in lang or lang in ("en", "eng") else 1
+    return 0
+
+def map_genre(genres_field, genre_choice):
+    if not isinstance(genres_field, str):
+        return 0
+    genres = [g.strip().lower() for g in genres_field.split(",")]
+    return 1 if genre_choice.lower() in genres else 0
+
+def map_filter_mode(row, filter_choice):
+    rating = safe_get(row, "Rating")
+    try:
+        rating_value = float(rating)
+    except Exception:
+        rating_value = None
+
+    if filter_choice == "Hits":
+        if rating_value is not None:
+            return 1 if rating_value >= 4.0 else 0
+        return 0
+
+    if filter_choice == "Hidden Gems":
+        if rating_value is not None:
+            return 1 if 3.0 <= rating_value < 4.0 else 0
+        return 0
+
+    if filter_choice == "Cult":
+        if rating_value is None:
+            return 1
+        if rating_value == 5.0 or rating_value <= 2.5:
+            return 1
+        return 0
+
+    return 0
+
+def map_energy_penalty(runtime, energy_choice):
+    try:
+        if pd.isna(runtime):
+            return 0
+        runtime = float(runtime)
+    except Exception:
+        return 0
+    if energy_choice == "Low":
+        return -1 if runtime > 140 else 0
+    if energy_choice == "High":
+        return 1 if runtime < 110 else 0
+    return 0
+
+def score_movies(df, answers):
+    df = df.copy()
+    df["score"] = 0
+
+    era_choice = answers.get("ERA")
+    if era_choice and "Year" in df.columns:
+        df["score"] += df["Year"].apply(lambda y: map_era(y, era_choice))
+
+    rt_choice = answers.get("RUNTIME")
+    if rt_choice and "Runtime" in df.columns:
+        df["score"] += df["Runtime"].apply(lambda r: map_runtime(r, rt_choice))
+
+    lang_choice = answers.get("LANG")
+    if lang_choice and "Language" in df.columns:
+        df["score"] += df["Language"].apply(lambda l: map_language(l, lang_choice))
+
+    genre_choice = answers.get("GENRE")
+    if genre_choice and "Genres" in df.columns:
+        df["score"] += df["Genres"].apply(lambda g: map_genre(g, genre_choice))
+
+    filter_choice = answers.get("FILTER")
+    if filter_choice:
+        df["score"] += df.apply(lambda row: map_filter_mode(row, filter_choice), axis=1)
+
+    energy_choice = answers.get("ENERGY")
+    if energy_choice and "Runtime" in df.columns:
+        df["score"] += df["Runtime"].apply(lambda r: map_energy_penalty(r, energy_choice))
+
+    # Soft bonus: if MOOD is "Uplifting", lightly reward comedies
+    mood_choice = answers.get("MOOD")
+    if mood_choice == "Uplifting" and "Genres" in df.columns:
+        df["score"] += df["Genres"].apply(
+            lambda g: 1 if isinstance(g, str) and "comedy" in g.lower() else 0
+        )
+
+    # Drop movies with zero score to keep results targeted
+    df = df[df["score"] > 0]
+
+    return df
+
+# --- SESSION STATE ---
+if "step" not in st.session_state:
+    st.session_state.step = 0
+if "answers" not in st.session_state:
+    st.session_state.answers = {}
+
+# --- MAIN UI WRAPPER ---
 st.markdown("<div class='apple-card'>", unsafe_allow_html=True)
 
+# --- STEP 0: LANDING PAGE ---
 if st.session_state.step == 0:
     st.markdown("<h1>Oracle.</h1>", unsafe_allow_html=True)
     st.markdown("<h2>The future of your movie night.</h2>", unsafe_allow_html=True)
@@ -119,173 +273,104 @@ if st.session_state.step == 0:
         st.session_state.step = 1
         st.rerun()
 
+# --- STEPS 1–18: QUESTIONS ---
 elif 1 <= st.session_state.step <= 18:
     q_id, label, opts = questions[st.session_state.step - 1]
     st.markdown(f"<h1>{label}</h1>", unsafe_allow_html=True)
     st.markdown(f"<h2>Requirement {st.session_state.step} of 18</h2>", unsafe_allow_html=True)
-    choice = st.radio(" ", opts, label_visibility="collapsed")
+
+    choice = st.radio(" ", opts, index=0, label_visibility="collapsed")
+
     if st.button("Continue"):
         st.session_state.answers[q_id] = choice
         st.session_state.step += 1
         st.rerun()
 
+# --- FINAL STEP: RESULTS ---
 else:
     st.markdown("<h1>Your Selection.</h1>", unsafe_allow_html=True)
-    
-    answers = st.session_state.answers
-    
+
     try:
         df = pd.read_csv(CSV_FILE)
-        # Assume columns: 'Name', 'Year' (rename if needed, e.g. df = df.rename(columns={'Title': 'Name'}))
-        # Optional: if 'Rating' in df, can use it for tie-breaking
-        
-        candidates = []
-        progress = st.progress(0)
-        status_text = st.empty()
-        
-        for idx, row in df.iterrows():
-            name = row['Name']
-            year = int(row['Year']) if pd.notna(row['Year']) else None
-            progress.progress((idx + 1) / len(df))
-            status_text.text(f"Analyzing: {name} ({year})")
-            
-            meta = get_clean_meta(name, year)
-            if not meta:
+
+        # Score movies based on diagnostic answers
+        scored = score_movies(df, st.session_state.answers)
+
+        if scored.empty:
+            # Fallback: if nothing fits, use full list with neutral scores
+            scored = df.copy()
+            scored["score"] = 0
+
+        scored = scored.sort_values("score", ascending=False)
+
+        # Top N pool, then randomize within that pool
+        top_n = min(30, len(scored))
+        candidates = scored.head(top_n)
+        winners = candidates.sample(min(3, len(candidates))) if top_n > 0 else pd.DataFrame()
+
+        max_score = scored["score"].max() if not scored.empty else 1
+        if max_score == 0:
+            max_score = 1  # avoid division by zero
+
+        for _, row in winners.iterrows():
+            name = safe_get(row, "Name")
+            year = safe_get(row, "Year")
+
+            data = get_clean_meta(name, year)
+
+            if not data:
                 continue
-                
-            score = 0
-            match_explain = []
-            
-            # Hard filters / high-weight matches
-            if "GENRE" in answers:
-                target_genres = genre_map.get(answers["GENRE"], [])
-                movie_genres = [g['name'] for g in meta.get('genres', [])]
-                if any(g in movie_genres or g.lower() in ' '.join(movie_genres).lower() for g in target_genres):
-                    score += 3  # strong weight
-                    match_explain.append("Genre match")
-            
-            if "ERA" in answers and year:
-                era_check = match_keywords["ERA"].get(answers["ERA"])
-                if era_check and era_check(year):
-                    score += 3
-                    match_explain.append("Era match")
-            
-            if "RUNTIME" in answers and 'runtime' in meta:
-                rt_check = match_keywords["RUNTIME"].get(answers["RUNTIME"])
-                if rt_check and rt_check(meta['runtime']):
-                    score += 2
-                    match_explain.append("Runtime match")
-            
-            if "LANG" in answers and answers["LANG"] == "English":
-                if meta.get('original_language') == 'en':
-                    score += 2
-                    match_explain.append("English language")
-            
-            if "RATING" in answers and 'release_dates' in meta:
-                # Rough cert check (US first)
-                certs = [r['certification'] for r in meta['release_dates'].get('results', []) if r['iso_3166_1'] == 'US']
-                target_certs = match_keywords["RATING"].get(answers["RATING"], [])
-                if any(c in target_certs for c in certs):
-                    score += 2
-                    match_explain.append("Maturity match")
-            
-            # Platform check
-            if "APP" in answers and 'watch/providers' in meta:
-                prov = meta['watch/providers'].get('results', {}).get('US', {}).get('flatrate', [])
-                plat_map = {"Netflix": "netflix", "Prime": "amazon", "Max": "hbo", "Apple TV": "apple"}
-                target = plat_map.get(answers["APP"], "").lower()
-                if any(target in p.get('provider_name', '').lower() for p in prov):
-                    score += 1
-                    match_explain.append("Available on " + answers["APP"])
-            
-            # Soft keyword matches (mood, visuals, etc.)
-            text_fields = ' '.join([
-                meta.get('title', ''),
-                meta.get('overview', ''),
-                meta.get('tagline', '')
-            ]).lower()
-            
-            for q in ["MOOD", "PACING", "VISUALS", "DEPTH", "HEART", "THEME", "SOUND", "STYLE"]:
-                if q in answers:
-                    kws = match_keywords.get(q, {}).get(answers[q], [])
-                    matched = sum(1 for kw in kws if kw in text_fields)
-                    if matched > 0:
-                        score += 1
-                        match_explain.append(f"{q}: {answers[q]} keyword hit")
-            
-            # Energy / Env / Filter as tie-breakers or minor boosts
-            if "ENERGY" in answers and answers["ENERGY"] == "Low" and meta.get('runtime', 0) < 100:
-                score += 1
-            if "ENV" in answers and answers["ENV"] == "Group" and "Comedy" in [g['name'] for g in meta.get('genres', [])]:
-                score += 1
-            
-            # Discovery mode
-            vote_count = meta.get('vote_count', 0)
-            if answers.get("FILTER") == "Hidden Gems" and 1000 < vote_count < 20000:
-                score += 2
-            elif answers.get("FILTER") == "Cult" and vote_count < 5000:
-                score += 2
-            # "Hits" = default, no penalty
-            
-            # "Apply Memory" — if CSV has ratings, prefer higher-rated
-            if answers.get("AI") == "Apply Memory" and 'Rating' in row and pd.notna(row['Rating']):
-                score += row['Rating'] / 2  # e.g. 4.0 → +2.0 bonus
-            
-            if score > 5:  # minimum threshold to avoid bad matches
-                candidates.append({
-                    'meta': meta,
-                    'score': score,
-                    'explain': match_explain,
-                    'orig_row': row
-                })
-            
-            time.sleep(0.15)  # gentle TMDB rate limit
-        
-        progress.empty()
-        status_text.empty()
-        
-        if not candidates:
-            st.error("No strong matches found. Try a Fresh Start or fewer strict filters.")
-        else:
-            # Sort: highest score first, then randomize within same score for variety
-            candidates.sort(key=lambda x: (-x['score'], random.random()))
-            top = candidates[:3]  # or 4/5 if you prefer
-            
-            for cand in top:
-                data = cand['meta']
-                score_pct = min(99, 70 + int(cand['score'] * 1.8))  # rough 75–99% range
-                
-                st.markdown("<div class='result-card'>", unsafe_allow_html=True)
-                col1, col2 = st.columns([1, 3])
-                with col1:
-                    posters = data.get('images', {}).get('posters', [])
-                    path = posters[0]['file_path'] if posters else data.get('poster_path')
-                    if path:
-                        st.image(f"https://image.tmdb.org/t/p/w500{path}")
-                    else:
-                        st.write("(No poster)")
-                with col2:
-                    st.markdown(f"<h3 style='color:white; margin:0;'>{data['title']} ({data.get('release_date', '????')[:4]})</h3>", unsafe_allow_html=True)
-                    overview = data.get('overview', 'No overview available.')
-                    st.write(overview[:280] + "..." if len(overview) > 280 else overview)
-                    st.markdown(f"<p style='color:#00ff88; font-weight:bold;'>Neural Match: {score_pct}%</p>", unsafe_allow_html=True)
-                    if cand['explain']:
-                        with st.expander("Why this match?"):
-                            st.write(" • " + "\n • ".join(cand['explain']))
-                st.markdown("</div>", unsafe_allow_html=True)
-    
+
+            st.markdown("<div class='result-card'>", unsafe_allow_html=True)
+            col1, col2 = st.columns([1, 2])
+
+            with col1:
+                posters = data.get("images", {}).get("posters", [])
+                path = None
+                if posters:
+                    path = posters[0].get("file_path")
+                if not path:
+                    path = data.get("poster_path")
+                if path:
+                    st.image(f"https://image.tmdb.org/t/p/w500{path}")
+
+            with col2:
+                title = data.get("title") or name or "Untitled"
+                st.markdown(
+                    f"<h3 style='color:white; margin:0;'>{title}</h3>",
+                    unsafe_allow_html=True
+                )
+
+                overview = data.get("overview") or ""
+                overview = overview.strip()
+                if overview:
+                    preview = overview[:200]
+                    if len(overview) > 200:
+                        preview += "..."
+                    st.write(preview)
+
+                # Neural Match score based on relative score
+                row_score = row.get("score", 0)
+                try:
+                    normalized = float(row_score) / float(max_score)
+                except Exception:
+                    normalized = 0.0
+                normalized = max(0.0, min(1.0, normalized))
+                neural_match = int(90 + normalized * 10)  # 90–100%
+
+                st.markdown(
+                    f"<p style='color:#00ff88; font-weight:bold;'>Neural Match: {neural_match}%</p>",
+                    unsafe_allow_html=True
+                )
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
     except Exception as e:
-        st.error(f"Error during recommendation: {str(e)}")
-    
-    if st.button("Restart Diagnostic"):
-        st.session_state.step = 0
-        st.session_state.answers = {}
-        st.rerun()
-    except:
-        st.error("CSV error.")
+        st.error(f"CSV error: {e}")
 
     if st.button("Restart"):
         st.session_state.step = 0
+        st.session_state.answers = {}
         st.rerun()
 
 st.markdown("</div>", unsafe_allow_html=True)
