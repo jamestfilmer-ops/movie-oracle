@@ -1,10 +1,6 @@
 import streamlit as st
 import requests
-import pandas as pd
 import time
-import math
-import json
-from io import StringIO
 from datetime import datetime
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -17,14 +13,14 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# API keys — from Streamlit secrets (Cloud) or hardcoded fallback
+# API keys
 TMDB_KEY = st.secrets.get("TMDB_API_KEY", "a20688a723e8c7dd1bef2c2cf21ea3eb")
 OMDB_KEY = st.secrets.get("OMDB_API_KEY", "5d2291bb")
 TMDB_BASE = "https://api.themoviedb.org/3"
 TMDB_IMG = "https://image.tmdb.org/t/p"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# CONSTANTS
+# CONSTANTS & PROVIDERS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TMDB_GENRES = {
     28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime",
@@ -44,22 +40,11 @@ GENRE_MAP = {
 }
 
 # Streaming provider IDs (TMDB uses JustWatch data)
-# Updated with Kanopy (191) and Watch TCM (361) for US Region
 PROVIDER_MAP = {
     "Netflix": [8], "Prime Video": [9, 119], "Apple TV+": [2, 350],
     "Hulu": [15], "Max": [384, 1899], "Disney+": [337],
     "Peacock": [386, 387], "Paramount+": [531],
     "Kanopy": [191], "Watch TCM": [361],
-    "Rent/Buy": [] # Logic handled separately
-}
-
-CONTENT_BY_RATING = {
-    "G":     {"violence": "None to minimal", "language": "Clean", "sexual": "None", "intense": "Mild at most"},
-    "PG":    {"violence": "Mild — some action or peril", "language": "Mild", "sexual": "None to very mild", "intense": "Mild"},
-    "PG-13": {"violence": "Moderate — action sequences, some blood", "language": "Moderate — some strong words", "sexual": "Mild — brief or implied at most", "intense": "Moderate"},
-    "R":     {"violence": "Strong — graphic scenes possible", "language": "Strong — frequent profanity likely", "sexual": "⚠️ Check Parents Guide before watching", "intense": "Strong"},
-    "NC-17": {"violence": "Severe", "language": "Strong", "sexual": "🚫 Likely explicit — NOT RECOMMENDED", "intense": "Severe"},
-    "NR":    {"violence": "Unrated — varies", "language": "Unrated — varies", "sexual": "⚠️ Unrated — check Parents Guide", "intense": "Varies"},
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -76,7 +61,7 @@ p, li, span, div, label { font-family: 'Nunito', sans-serif !important; }
 
 /* Header */
 .main-header { text-align: center; padding: 1rem 0 0.5rem; }
-.main-header h1 { font-size: 2.6rem; color: #2D2A26; margin: 0; }
+.main-header h1 { font-size: 2.5rem; color: #2D2A26; margin: 0; }
 .brand-badge {
     display: inline-block; padding: 4px 16px; margin-top: 8px;
     background: #E8F5E9; border-radius: 99px;
@@ -87,14 +72,14 @@ p, li, span, div, label { font-family: 'Nunito', sans-serif !important; }
 /* Movie cards */
 .movie-card {
     background: #FFFFFF; border-radius: 18px; padding: 24px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.06); margin-bottom: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.06); margin-bottom: 12px;
     border: 2px solid transparent;
 }
 .movie-card.gold { border-color: #3BA55D; box-shadow: 0 6px 30px rgba(59,165,93,0.12); }
 .movie-card.silver { border-color: #F4A236; }
 .movie-card.bronze { border-color: #4A90D9; }
 
-.movie-title { font-size: 1.5rem; font-weight: 700; color: #2D2A26; line-height: 1.3; }
+.movie-title { font-size: 1.4rem; font-weight: 700; color: #2D2A26; line-height: 1.3; }
 .movie-meta { color: #9E9890; font-size: 0.85rem; margin-top: 4px; }
 
 .genre-tag {
@@ -108,22 +93,6 @@ p, li, span, div, label { font-family: 'Nunito', sans-serif !important; }
 }
 .rating-imdb { background: #FFF8E1; color: #F5C518; }
 .rating-rt { background: #FFF0F0; color: #FA320A; }
-
-.content-box {
-    padding: 12px 16px; margin-top: 12px; border-radius: 12px;
-    font-size: 0.85rem; line-height: 1.6;
-    border-left: 3px solid #ddd; background: #FAFAF5; color: #6B6560;
-}
-.content-box.wife { border-color: #F4A236; background: #FFF8F0; }
-
-.links-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
-.link-btn {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 6px 14px; border-radius: 8px; font-size: 0.8rem;
-    font-weight: 700; text-decoration: none !important;
-    background: #F5EFE0; color: #6B6560 !important; transition: all 0.2s;
-}
-.link-btn:hover { background: #E0DACC; }
 
 /* Buttons */
 .stButton > button {
@@ -141,7 +110,6 @@ p, li, span, div, label { font-family: 'Nunito', sans-serif !important; }
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def tmdb_search(title, year=None):
-    """Search TMDB for a movie."""
     try:
         params = {"api_key": TMDB_KEY, "query": title}
         if year: params["year"] = year
@@ -169,14 +137,13 @@ def tmdb_search(title, year=None):
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def tmdb_get_recommendations(tmdb_id):
-    """Get recommendations based on a seed movie ID."""
     try:
         params = {"api_key": TMDB_KEY, "language": "en-US", "page": 1}
         r = requests.get(f"{TMDB_BASE}/movie/{tmdb_id}/recommendations", params=params, timeout=10)
         if r.status_code == 200:
             results = r.json().get("results", [])
             movies = []
-            for m in results[:20]: # Grab top 20 recommendations
+            for m in results[:20]:
                 movies.append({
                     "name": m["title"],
                     "year": int(m["release_date"][:4]) if m.get("release_date") else 0,
@@ -196,7 +163,6 @@ def tmdb_get_recommendations(tmdb_id):
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def tmdb_full(tmdb_id):
-    """Get full TMDB details."""
     try:
         params = {"api_key": TMDB_KEY, "append_to_response": "watch/providers,release_dates"}
         r = requests.get(f"{TMDB_BASE}/movie/{tmdb_id}", params=params, timeout=10)
@@ -213,18 +179,15 @@ def tmdb_full(tmdb_id):
             
             us_providers = data.get("watch/providers", {}).get("results", {}).get("US", {})
             flatrate = us_providers.get("flatrate", [])
-            rent = us_providers.get("rent", [])
-            buy = us_providers.get("buy", [])
-
+            
             return {
                 "runtime": data.get("runtime", 0),
                 "certification": cert,
                 "imdb_id": data.get("imdb_id", ""),
                 "flatrate_providers": [{"id": p["provider_id"], "name": p["provider_name"]} for p in flatrate],
-                "rent_providers": [{"id": p["provider_id"], "name": p["provider_name"]} for p in rent],
                 "jw_link": us_providers.get("link", ""),
                 "genres_full": [g["name"] for g in data.get("genres", [])],
-                "director": "", # Would need credits endpoint, skipping for speed
+                "director": "",
             }
         return None
     except Exception:
@@ -232,7 +195,6 @@ def tmdb_full(tmdb_id):
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def omdb_lookup(title, year):
-    """Get OMDB data."""
     try:
         params = {"t": title, "y": year, "apikey": OMDB_KEY}
         r = requests.get("https://www.omdbapi.com/", params=params, timeout=10)
@@ -259,30 +221,24 @@ def parse_letterboxd_csv(file_content):
     if text[0] == '\ufeff': text = text[1:]
     lines = text.strip().split('\n')
     movies = []
-    if len(lines) < 2: return []
-    
-    # Simple CSV parser to avoid pandas dependency issues with quoted strings
     import csv
     reader = csv.reader(lines)
-    header = next(reader) # Skip header
-    
-    for row in reader:
-        if len(row) >= 2:
-            try:
-                # Letterboxd columns: Date, Name, Year, Letterboxd URI
+    try:
+        next(reader) 
+        for row in reader:
+            if len(row) >= 2:
                 name = row[1]
                 year = int(row[2]) if row[2].isdigit() else 0
                 uri = row[3] if len(row) > 3 else ""
                 movies.append({"name": name, "year": year, "uri": uri, "date_added": row[0]})
-            except:
-                continue
+    except:
+        pass
     return movies
 
 def enrich_light(movies, progress_bar, status_text):
     enriched = []
     total = len(movies)
     for i, m in enumerate(movies):
-        # If we already have TMDB ID (from recommendation search), skip search
         if "tmdb_id" in m and m["tmdb_id"]:
             enriched.append(m)
         else:
@@ -331,8 +287,7 @@ def score_movie(movie, answers):
     year = movie.get("year", 2000)
     vote = movie.get("vote_average", 0)
     
-    # 1. GENRES (Multi-select)
-    # Check if ANY of the selected genres match the movie's genres
+    # 1. GENRES
     user_genres = answers.get("genres", [])
     if user_genres:
         matches = 0
@@ -340,18 +295,16 @@ def score_movie(movie, answers):
             g_ids = GENRE_MAP.get(g_name, [])
             if set(g_ids) & genres:
                 matches += 1
-        
-        if matches > 0:
-            score += 30 + (matches * 5) # Base bonus + extra for multiple matches
+        if matches > 0: score += 30 + (matches * 5)
     
-    # 2. MOOD (Multi-select)
+    # 2. MOOD
     moods = answers.get("mood", [])
     if "Laugh" in moods and 35 in genres: score += 15
     if "Think/Drama" in moods and genres & {18, 99, 36}: score += 15
     if "Adrenaline" in moods and genres & {28, 53, 27}: score += 15
     if "Feel/Cry" in moods and genres & {18, 10749}: score += 15
     
-    # 3. ERAS (Multi-select Decades)
+    # 3. ERAS
     eras = answers.get("eras", [])
     if eras:
         movie_decade = (year // 10) * 10
@@ -361,7 +314,7 @@ def score_movie(movie, answers):
         elif "Pre-1950s" in eras and year < 1950:
             score += 25
 
-    # 4. STREAMING (Multi-select)
+    # 4. STREAMING
     user_providers = answers.get("providers", [])
     movie_providers = {p["id"] for p in movie.get("streaming_flat", [])}
     
@@ -374,24 +327,19 @@ def score_movie(movie, answers):
                 break
         
         if provider_match:
-            score += 40 # Huge bonus for being free on user's services
+            score += 40
         elif "Rent/Buy" not in user_providers:
-            score -= 10 # Penalty if not on their services and they didn't select Rent
+            score -= 10
             
-    # 5. BASE QUALITY
     score += (vote * 2)
-    
-    # 6. WIFE FILTER
     who = answers.get("who", "Solo")
     if who == "Wife/Partner":
-        if "Action" in user_genres and "Romance" not in user_genres:
-             if genres & {28, 53} and vote < 7.0: score -= 15 # Penalize dumb action
-        if genres & {27}: score -= 20 # General penalty for horror on wife night unless specified
+        if genres & {27}: score -= 20 
         
     return score
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# DISPLAY GENERATORS
+# DISPLAY
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def format_runtime(minutes):
@@ -399,7 +347,7 @@ def format_runtime(minutes):
     h, m = divmod(minutes, 60)
     return f"{h}h {m}m"
 
-def render_movie_card(movie, rank, answers):
+def render_movie_card_html(movie, rank, answers):
     # Prepare Data
     medals = ["🥇", "🥈", "🥉"]
     classes = ["gold", "silver", "bronze"]
@@ -422,28 +370,16 @@ def render_movie_card(movie, rank, answers):
     if imdb != "N/A": ratings_html += f'<span class="rating-badge rating-imdb">⭐ {imdb}</span>'
     if rt != "N/A": ratings_html += f'<span class="rating-badge rating-rt">🍅 {rt}</span>'
 
-    # Links (FIXED: Using safe HTML structure)
-    imdb_id = movie.get("imdb_id", "")
-    jw_link = movie.get("jw_link", "")
-    
-    links_html = '<div class="links-row">'
-    if imdb_id:
-        links_html += f'<a href="https://www.imdb.com/title/{imdb_id}/" target="_blank" class="link-btn">⭐ IMDb</a>'
-        links_html += f'<a href="https://www.imdb.com/title/{imdb_id}/parentalguide" target="_blank" class="link-btn">🛡️ Parents Guide</a>'
-    if jw_link:
-        links_html += f'<a href="{jw_link}" target="_blank" class="link-btn">📺 Watch (JustWatch)</a>'
-    links_html += '</div>'
-
     # Wife Note
     wife_note = ""
     if answers.get("who") == "Wife/Partner":
         wife_note = f"""
-        <div class="content-box wife">
-            <strong>Couples Note:</strong> {'Good pick based on scores.' if movie.get('vote_average',0) > 7 else 'Might be risky.'}
+        <div style="background:#FFF8F0; padding:10px; border-radius:8px; margin-top:10px; border-left:3px solid #F4A236; font-size:0.85rem; color:#6B6560;">
+            <strong>Couple's Note:</strong> {'Good pick.' if movie.get('vote_average',0) > 7 else 'Might be risky.'}
         </div>
         """
 
-    # Card HTML
+    # Card HTML - NO LINKS HERE to avoid "raw code" errors
     card_html = f"""
     <div class="movie-card {classes[rank] if rank < 3 else ''}">
         <div style="display:flex; gap:10px; margin-bottom:10px;">
@@ -457,7 +393,6 @@ def render_movie_card(movie, rank, answers):
         <div style="margin-bottom:10px;">{ratings_html}</div>
         <div style="font-size:0.95rem; color:#444; line-height:1.5;">{movie.get('overview', '')[:250]}...</div>
         {wife_note}
-        {links_html}
     </div>
     """
     
@@ -469,7 +404,6 @@ def render_movie_card(movie, rank, answers):
 # MAIN APP
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# Init Session State
 if "movies" not in st.session_state: st.session_state.movies = []
 if "enriched" not in st.session_state: st.session_state.enriched = False
 if "results" not in st.session_state: st.session_state.results = None
@@ -482,7 +416,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ── STEP 1: SOURCE SELECTION ──
+# ── STEP 1: SOURCE ──
 if not st.session_state.enriched:
     st.markdown("### 1️⃣ Get Your Movies")
     source = st.radio("Choose source:", ["📁 Upload Letterboxd CSV", "🔍 Search for a Seed Movie"], horizontal=True)
@@ -498,7 +432,7 @@ if not st.session_state.enriched:
                 st.session_state.enriched = True
                 st.rerun()
 
-    else: # Seed Movie Search
+    else:
         seed_query = st.text_input("Enter a movie you love (e.g., 'Inception'):")
         if seed_query and st.button("Generate Recommendations"):
             with st.spinner("Searching TMDB..."):
@@ -507,7 +441,7 @@ if not st.session_state.enriched:
                     st.info(f"Found: **{seed_result['title']}** ({seed_result['year']}). Finding similar movies...")
                     recs = tmdb_get_recommendations(seed_result['tmdb_id'])
                     if recs:
-                        st.session_state.movies = recs # Already enriched lightly in function
+                        st.session_state.movies = recs 
                         st.session_state.enriched = True
                         st.rerun()
                     else:
@@ -537,14 +471,12 @@ elif st.session_state.results is None:
             answers = {"who": q_who, "genres": q_genres, "mood": q_mood, "eras": q_eras, "providers": q_providers}
             
             with st.spinner("Analyzing..."):
-                # Score all
                 scored = []
                 for m in st.session_state.movies:
                     s = score_movie(m, answers)
                     scored.append((s, m))
                 scored.sort(key=lambda x: x[0], reverse=True)
                 
-                # Full enrich top 5
                 final_picks = []
                 for score, m in scored[:5]:
                     final_picks.append(enrich_full_movie(m))
@@ -569,20 +501,28 @@ else:
     st.markdown("<br>", unsafe_allow_html=True)
     
     for i, movie in enumerate(results["picks"]):
-        poster_html, card_html = render_movie_card(movie, i, results["answers"])
+        poster_html, card_html = render_movie_card_html(movie, i, results["answers"])
         c1, c2 = st.columns([1, 3])
-        with c1: st.markdown(poster_html, unsafe_allow_html=True)
-        with c2: st.markdown(card_html, unsafe_allow_html=True)
+        with c1: 
+            st.markdown(poster_html, unsafe_allow_html=True)
+        with c2: 
+            st.markdown(card_html, unsafe_allow_html=True)
+            # Render Links here as Markdown to avoid Raw HTML issues
+            imdb_id = movie.get("imdb_id", "")
+            jw_link = movie.get("jw_link", "")
+            links = []
+            if imdb_id:
+                links.append(f"[⭐ IMDb](https://www.imdb.com/title/{imdb_id}/)")
+                links.append(f"[🛡️ Parents Guide](https://www.imdb.com/title/{imdb_id}/parentalguide)")
+            if jw_link:
+                links.append(f"[📺 Watch on JustWatch]({jw_link})")
+            
+            st.markdown(" **·** ".join(links))
+        
         st.markdown("---")
 
-    # Honorable Mentions (Fixed Display)
-    with st.expander("👀 Honorable Mentions"):
+    # Honorable Mentions - Simple List (No HTML Box)
+    if results.get("runner_ups"):
+        st.markdown("### 👀 Honorable Mentions")
         for m in results["runner_ups"]:
-            col_a, col_b = st.columns([4, 1])
-            with col_a:
-                st.markdown(f"**{m['name']}** ({m['year']})")
-                st.caption(m.get('overview', '')[:100] + "...")
-            with col_b:
-                if m.get('tmdb_id'):
-                    st.markdown(f"[View on TMDB](https://www.themoviedb.org/movie/{m['tmdb_id']})")
-            st.divider()
+            st.markdown(f"**{m['name']}** ({m['year']})")
