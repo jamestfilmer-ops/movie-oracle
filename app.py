@@ -34,30 +34,6 @@ st.set_page_config(page_title="Oracle", layout="wide")
 
 st.markdown("""
     <style>
-    /* Hide all Streamlit default UI elements (The "Blank Banners") */
     header {visibility: hidden;}
     footer {visibility: hidden;}
     #MainMenu {visibility: hidden;}
-    
-    /* Background and Centering */
-    .stApp {
-        background-color: #000000;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-    
-    .block-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-        max-width: 1000px !important;
-        margin: auto;
-    }
-
-    /* Apple-style Card */
-    .apple-card {
-        background: #1c1c1e;
-        border-radius: 32px;
-        padding: 60px;
-        text-align: center;
-        box-shadow: 0 30px 6
