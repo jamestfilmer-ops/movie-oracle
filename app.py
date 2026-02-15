@@ -33,6 +33,7 @@ questions = [
 # --- STREAMLIT PAGE CONFIG & CSS ---
 st.set_page_config(page_title="Oracle", layout="wide")
 
+# White-majority, black accents, Apple-like
 style = """
 <style>
 header {visibility: hidden;}
@@ -40,84 +41,117 @@ footer {visibility: hidden;}
 #MainMenu {visibility: hidden;}
 
 .stApp {
-    background-color: #000000;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    color: #ffffff;
+    background-color: #f5f5f7; /* Apple grey-white */
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+    color: #111111;
 }
 
-/* Centered card */
+/* Container: centered but not full-height so page can scroll */
 .block-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
     max-width: 1000px !important;
-    margin: auto;
+    margin-left: auto;
+    margin-right: auto;
+    padding-top: 60px;
+    padding-bottom: 60px;
 }
 
-/* Main Apple-style card */
+/* Main card */
 .apple-card {
-    background: #1c1c1e;
+    background: #ffffff;
     border-radius: 32px;
     padding: 60px;
     text-align: center;
-    box-shadow: 0 30px 60px rgba(0,0,0,0.5);
-    border: 1px solid #3a3a3c;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.12);
+    border: 1px solid #e5e5ea;
     width: 100%;
-    color: #ffffff;
 }
 
 /* Headings */
 h1 {
-    color: #ffffff !important;
-    font-size: 48px !important;
+    color: #000000 !important;
+    font-size: 44px !important;
     font-weight: 700 !important;
-    letter-spacing: -1.5px !important;
+    letter-spacing: -1.2px !important;
     margin-bottom: 10px !important;
 }
 h2 {
-    color: #d0d0d5 !important;
-    font-size: 24px !important;
+    color: #3a3a3c !important;
+    font-size: 20px !important;
     font-weight: 500 !important;
-    margin-bottom: 40px !important;
+    margin-bottom: 36px !important;
 }
 
-/* Buttons: darker, less "pill bottle" */
+/* Buttons: black accent, soft radius */
 .stButton>button {
-    background: #2c2c2e;
+    background: #000000;
     color: #ffffff;
-    border-radius: 16px;
-    padding: 12px 30px;
-    font-size: 18px;
+    border-radius: 999px;
+    padding: 12px 32px;
+    font-size: 17px;
     font-weight: 600;
-    border: 1px solid #3a3a3c;
+    border: none;
     width: 220px;
-    margin-top: 20px;
-    box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+    margin-top: 24px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.25);
     cursor: pointer;
 }
 .stButton>button:hover {
-    background: #3a3a3c;
-    border-color: #5a5a5f;
+    background: #1c1c1e;
 }
 
-/* Radio labels and widget text brightened */
+/* Radios and labels */
 [data-testid="stWidgetLabel"] p {
-    color: #ffffff !important;
+    color: #111111 !important;
+    font-size: 16px !important;
 }
 label, .stRadio, .stSelectbox, .stText, .stMarkdown {
-    color: #ffffff !important;
+    color: #111111 !important;
 }
 
-/* Result cards */
+/* Radio options spacing */
+[data-baseweb="radio"] > div {
+    gap: 6px;
+}
+
+/* Result cards section */
 .result-card {
-    background: #1c1c1e;
+    background: #ffffff;
     border-radius: 24px;
-    padding: 30px;
+    padding: 24px;
     margin-bottom: 20px;
-    border: 1px solid #3a3a3c;
+    border: 1px solid #e5e5ea;
     text-align: left;
-    color: #ffffff;
+    color: #111111;
+}
+
+/* Result title */
+.result-card h3 {
+    font-size: 22px;
+    margin-bottom: 8px;
+}
+
+/* Ratings row */
+.rating-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    font-size: 14px;
+    color: #3a3a3c;
+}
+
+.rating-pill {
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid #d2d2d7;
+    background: #f5f5f7;
+}
+
+/* Neural Match green text */
+.neural {
+    color: #06c167;
+    font-weight: 600;
+    font-size: 16px;
+    margin-top: 8px;
 }
 </style>
 """
@@ -139,7 +173,7 @@ def get_clean_meta(name, year):
             m_id = res_json["results"][0]["id"]
             movie_params = {
                 "api_key": TMDB_API_KEY,
-                "append_to_response": "images,watch/providers,release_dates",
+                "append_to_response": "images,watch/providers,release_dates,external_ids",
                 "include_image_language": "en,null"
             }
             full = requests.get(f"{base_movie}/{m_id}", params=movie_params, timeout=8)
@@ -313,6 +347,7 @@ elif 1 <= st.session_state.step <= 18:
 # --- FINAL STEP: RESULTS ---
 else:
     st.markdown("<h1>Your Selection.</h1>", unsafe_allow_html=True)
+    st.markdown("<h2>Curated from your Letterboxd universe.</h2>", unsafe_allow_html=True)
 
     try:
         df = pd.read_csv(CSV_FILE)
@@ -336,6 +371,9 @@ else:
         for _, row in winners.iterrows():
             name = safe_get(row, "Name")
             year = safe_get(row, "Year")
+            lb_rating = safe_get(row, "Rating")  # Letterboxd rating, if present
+            imdb_rating = safe_get(row, "IMDb Rating")  # Optional column in your CSV
+            mpaa = safe_get(row, "MPAA")  # Optional content rating
 
             data = get_clean_meta(name, year)
             if not data:
@@ -357,18 +395,60 @@ else:
             with col2:
                 title = data.get("title") or name or "Untitled"
                 st.markdown(
-                    f"<h3 style='color:white; margin:0;'>{title}</h3>",
+                    f"<h3 style='margin:0;'>{title}</h3>",
                     unsafe_allow_html=True
                 )
 
-                overview = data.get("overview") or ""
-                overview = overview.strip()
+                overview = (data.get("overview") or "").strip()
                 if overview:
-                    preview = overview[:200]
-                    if len(overview) > 200:
+                    preview = overview[:260]
+                    if len(overview) > 260:
                         preview += "..."
                     st.write(preview)
 
+                # Ratings row: Letterboxd, IMDb, content rating, year
+                rating_bits = []
+
+                if lb_rating not in (None, "", float("nan")):
+                    rating_bits.append(f"<span class='rating-pill'>Letterboxd {lb_rating}★</span>")
+
+                # If your CSV has explicit IMDb rating, show it
+                if imdb_rating not in (None, "", float("nan")):
+                    rating_bits.append(f"<span class='rating-pill'>IMDb {imdb_rating}</span>")
+
+                # Basic rating from TMDB if nothing else
+                if not rating_bits:
+                    tmdb_vote = data.get("vote_average")
+                    if tmdb_vote:
+                        rating_bits.append(f"<span class='rating-pill'>TMDB {tmdb_vote:.1f}</span>")
+
+                if mpaa:
+                    rating_bits.append(f"<span class='rating-pill'>{mpaa}</span>")
+
+                if year:
+                    rating_bits.append(f"<span class='rating-pill'>{int(year)}</span>")
+
+                # External links (Letterboxd / IMDb) – placeholders if you have IDs in CSV
+                lb_url = safe_get(row, "Letterboxd URL")
+                imdb_id = data.get("imdb_id")  # from TMDB external_ids
+
+                link_bits = []
+                if lb_url:
+                    link_bits.append(f"<span class='rating-pill'><a href='{lb_url}' target='_blank' style='color:#111111;text-decoration:none;'>Letterboxd</a></span>")
+                if imdb_id:
+                    imdb_url = f"https://www.imdb.com/title/{imdb_id}/"
+                    link_bits.append(f"<span class='rating-pill'><a href='{imdb_url}' target='_blank' style='color:#111111;text-decoration:none;'>IMDb</a></span>")
+
+                row_html = ""
+                if rating_bits:
+                    row_html += "".join(rating_bits)
+                if link_bits:
+                    row_html += "".join(link_bits)
+
+                if row_html:
+                    st.markdown(f"<div class='rating-row'>{row_html}</div>", unsafe_allow_html=True)
+
+                # Neural Match
                 row_score = row.get("score", 0)
                 try:
                     normalized = float(row_score) / float(max_score)
@@ -378,7 +458,7 @@ else:
                 neural_match = int(90 + normalized * 10)
 
                 st.markdown(
-                    f"<p style='color:#00ff88; font-weight:bold;'>Neural Match: {neural_match}%</p>",
+                    f"<div class='neural'>Neural Match: {neural_match}%</div>",
                     unsafe_allow_html=True
                 )
 
