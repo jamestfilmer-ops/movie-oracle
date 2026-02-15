@@ -38,10 +38,14 @@ style = """
 header {visibility: hidden;}
 footer {visibility: hidden;}
 #MainMenu {visibility: hidden;}
+
 .stApp {
     background-color: #000000;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #ffffff;
 }
+
+/* Centered card */
 .block-container {
     display: flex;
     justify-content: center;
@@ -50,6 +54,8 @@ footer {visibility: hidden;}
     max-width: 1000px !important;
     margin: auto;
 }
+
+/* Main Apple-style card */
 .apple-card {
     background: #1c1c1e;
     border-radius: 32px;
@@ -58,7 +64,10 @@ footer {visibility: hidden;}
     box-shadow: 0 30px 60px rgba(0,0,0,0.5);
     border: 1px solid #3a3a3c;
     width: 100%;
+    color: #ffffff;
 }
+
+/* Headings */
 h1 {
     color: #ffffff !important;
     font-size: 48px !important;
@@ -67,22 +76,40 @@ h1 {
     margin-bottom: 10px !important;
 }
 h2 {
-    color: #86868b !important;
+    color: #d0d0d5 !important;
     font-size: 24px !important;
     font-weight: 500 !important;
     margin-bottom: 40px !important;
 }
+
+/* Buttons: darker, less "pill bottle" */
 .stButton>button {
-    background: #ffffff;
-    color: #000000;
-    border-radius: 980px;
+    background: #2c2c2e;
+    color: #ffffff;
+    border-radius: 16px;
     padding: 12px 30px;
     font-size: 18px;
     font-weight: 600;
-    border: none;
+    border: 1px solid #3a3a3c;
     width: 220px;
     margin-top: 20px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+    cursor: pointer;
 }
+.stButton>button:hover {
+    background: #3a3a3c;
+    border-color: #5a5a5f;
+}
+
+/* Radio labels and widget text brightened */
+[data-testid="stWidgetLabel"] p {
+    color: #ffffff !important;
+}
+label, .stRadio, .stSelectbox, .stText, .stMarkdown {
+    color: #ffffff !important;
+}
+
+/* Result cards */
 .result-card {
     background: #1c1c1e;
     border-radius: 24px;
@@ -90,6 +117,7 @@ h2 {
     margin-bottom: 20px;
     border: 1px solid #3a3a3c;
     text-align: left;
+    color: #ffffff;
 }
 </style>
 """
@@ -97,7 +125,6 @@ st.markdown(style, unsafe_allow_html=True)
 
 # --- TMDB HELPERS ---
 def get_clean_meta(name, year):
-    # Falls back gracefully if TMDB is unreachable
     base_search = "https://api.themoviedb.org/3/search/movie"
     base_movie = "https://api.themoviedb.org/3/movie"
     try:
@@ -123,7 +150,6 @@ def get_clean_meta(name, year):
 
 # --- SCORING HELPERS ---
 def safe_get(row, col):
-    # small guard to avoid KeyError
     try:
         return row[col]
     except Exception:
@@ -244,14 +270,12 @@ def score_movies(df, answers):
     if energy_choice and "Runtime" in df.columns:
         df["score"] += df["Runtime"].apply(lambda r: map_energy_penalty(r, energy_choice))
 
-    # Soft bonus: if MOOD is "Uplifting", lightly reward comedies
     mood_choice = answers.get("MOOD")
     if mood_choice == "Uplifting" and "Genres" in df.columns:
         df["score"] += df["Genres"].apply(
             lambda g: 1 if isinstance(g, str) and "comedy" in g.lower() else 0
         )
 
-    # Drop movies with zero score to keep results targeted
     df = df[df["score"] > 0]
 
     return df
@@ -293,31 +317,27 @@ else:
     try:
         df = pd.read_csv(CSV_FILE)
 
-        # Score movies based on diagnostic answers
         scored = score_movies(df, st.session_state.answers)
 
         if scored.empty:
-            # Fallback: if nothing fits, use full list with neutral scores
             scored = df.copy()
             scored["score"] = 0
 
         scored = scored.sort_values("score", ascending=False)
 
-        # Top N pool, then randomize within that pool
         top_n = min(30, len(scored))
         candidates = scored.head(top_n)
         winners = candidates.sample(min(3, len(candidates))) if top_n > 0 else pd.DataFrame()
 
         max_score = scored["score"].max() if not scored.empty else 1
         if max_score == 0:
-            max_score = 1  # avoid division by zero
+            max_score = 1
 
         for _, row in winners.iterrows():
             name = safe_get(row, "Name")
             year = safe_get(row, "Year")
 
             data = get_clean_meta(name, year)
-
             if not data:
                 continue
 
@@ -349,14 +369,13 @@ else:
                         preview += "..."
                     st.write(preview)
 
-                # Neural Match score based on relative score
                 row_score = row.get("score", 0)
                 try:
                     normalized = float(row_score) / float(max_score)
                 except Exception:
                     normalized = 0.0
                 normalized = max(0.0, min(1.0, normalized))
-                neural_match = int(90 + normalized * 10)  # 90–100%
+                neural_match = int(90 + normalized * 10)
 
                 st.markdown(
                     f"<p style='color:#00ff88; font-weight:bold;'>Neural Match: {neural_match}%</p>",
