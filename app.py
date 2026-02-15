@@ -1,172 +1,102 @@
-import requests
-import pandas as pd
 import streamlit as st
-import random
+import pandas as pd
+import requests
+import numpy as np
 
-# -------------------------------------------------
+# ==========================
 # CONFIG
-# -------------------------------------------------
+# ==========================
 
-TMDB_API_KEY = "YOUR_TMDB_KEY"
+st.set_page_config(
+    page_title="The Lindell Movie Selector",
+    page_icon="🎬",
+    layout="wide"
+)
+
+TMDB_API_KEY = "YOUR_TMDB_KEY_HERE"
 OMDB_API_KEY = "5d2291bb"
-CSV_FILE = "watchlist-isaaclindell-2026-02-14-15-55-utc.csv"
 
-st.set_page_config(page_title="The Lindell Movie Selector", layout="wide")
-
-# -------------------------------------------------
-# CLEAN UI
-# -------------------------------------------------
+# ==========================
+# CLEAN CSS (NO PILL BOTTLE)
+# ==========================
 
 st.markdown("""
 <style>
-header, footer, #MainMenu {visibility:hidden;}
-
-.stApp {
-    background:#f5f5f7;
-    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-}
-
 .block-container {
-    max-width:900px !important;
+    padding-top: 2rem;
 }
-
-h1 {
-    font-size:40px;
-    font-weight:700;
-    margin-bottom:0;
-}
-
-.subtitle {
-    color:#555;
-    margin-bottom:30px;
-}
-
-.stButton>button {
-    background:#000;
-    color:white;
-    border-radius:8px;
-    padding:10px 24px;
-    font-weight:600;
-    border:none;
-}
-
-.question-card {
-    background:#fff;
-    padding:32px;
-    border-radius:18px;
-    border:1px solid #e5e5ea;
-    margin-top:20px;
-}
-
-.result-card {
-    background:#fff;
-    padding:24px;
-    border-radius:16px;
-    border:1px solid #e5e5ea;
-    margin-bottom:24px;
-}
-
-.rating-strip {
-    font-size:14px;
-    color:#444;
-    margin-top:10px;
-}
-
-.advisory {
-    background:#fafafa;
-    border:1px solid #e5e5ea;
-    padding:10px;
-    border-radius:10px;
-    margin-top:10px;
-    font-size:14px;
-}
-
 img {
-    border-radius:12px;
+    border-radius:18px;
+}
+.rating-pill {
+    display:inline-block;
+    padding:6px 12px;
+    margin:4px 6px 4px 0;
+    border-radius:20px;
+    background:#111;
+    color:white;
+    font-size:13px;
+}
+.advisory {
+    background:#fff4e5;
+    border:1px solid #ffd8a8;
+    padding:12px;
+    border-radius:14px;
+    font-size:14px;
+    margin-top:10px;
+}
+h1 {
+    font-weight:700;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------------------------------------
-# 18 QUESTIONS
-# -------------------------------------------------
-
-questions = [
-    ("ERA", "Pick a time period", ["Pre-1970", "70s-90s", "2000-2015", "Modern"]),
-    ("GENRE", "Choose a vibe", ["Drama", "Comedy", "Thriller", "Sci-Fi"]),
-    ("RUNTIME", "How long?", ["Under 100 min", "100-130 min", "Epic"]),
-    ("MOOD", "Tonight feels...", ["Light", "Serious", "Intense"]),
-    ("LANG", "Language?", ["English", "International"]),
-    ("ENERGY", "Your energy level?", ["Low", "Medium", "High"]),
-    ("DISCOVERY", "What are we doing?", ["Favorites", "Hidden Gems", "Wildcard"]),
-    ("DEPTH", "Story complexity?", ["Simple", "Layered"]),
-    ("YEAR_BIAS", "Newer or older?", ["Newer", "Older", "No Preference"]),
-    ("REWATCH", "Rewatchable?", ["Yes", "Doesn't matter"]),
-    ("VISUAL", "Visual style?", ["Clean", "Gritty", "Colorful"]),
-    ("PACING", "Pacing?", ["Fast", "Slow", "Balanced"]),
-    ("GROUP", "Watching with?", ["Solo", "Partner", "Group"]),
-    ("INTENSITY", "Violence tolerance?", ["Low", "Medium", "High"]),
-    ("AWARDS", "Award winners?", ["Yes", "No Preference"]),
-    ("RATING", "MPAA preference?", ["Family", "PG-13", "R", "No Preference"]),
-    ("NOSTALGIA", "Feel nostalgic?", ["Yes", "No"]),
-    ("SURPRISE", "Take a risk?", ["Yes", "No"])
-]
-
-# -------------------------------------------------
-# DATA NORMALIZATION
-# -------------------------------------------------
-
-def normalize_columns(df):
-    mapping = {
-        "Name": ["Name", "Title"],
-        "Year": ["Year"],
-        "Genres": ["Genres"],
-        "Runtime": ["Runtime"],
-        "Rating": ["Rating", "Your Rating"]
-    }
-    for standard, aliases in mapping.items():
-        for col in aliases:
-            if col in df.columns:
-                df[standard] = df[col]
-                break
-        if standard not in df.columns:
-            df[standard] = None
-    return df
-
-# -------------------------------------------------
-# API HELPERS
-# -------------------------------------------------
+# ==========================
+# API FUNCTIONS
+# ==========================
 
 @st.cache_data(show_spinner=False)
-def get_tmdb(title, year):
+def get_tmdb_meta(title, year):
     try:
-        r = requests.get(
+        search = requests.get(
             "https://api.themoviedb.org/3/search/movie",
-            params={"api_key": TMDB_API_KEY, "query": title, "year": year},
+            params={
+                "api_key": TMDB_API_KEY,
+                "query": title,
+                "year": year
+            },
             timeout=6
-        )
-        data = r.json()
-        if not data.get("results"):
+        ).json()
+
+        if not search.get("results"):
             return None
 
-        movie_id = data["results"][0]["id"]
+        movie_id = search["results"][0]["id"]
 
-        full = requests.get(
+        details = requests.get(
             f"https://api.themoviedb.org/3/movie/{movie_id}",
-            params={"api_key": TMDB_API_KEY, "append_to_response": "images"},
+            params={
+                "api_key": TMDB_API_KEY,
+                "append_to_response": "images"
+            },
             timeout=6
-        )
-        return full.json()
+        ).json()
+
+        return details
     except:
         return None
 
 
 @st.cache_data(show_spinner=False)
-def get_omdb(title, year):
+def get_omdb_data(title, year):
     try:
         r = requests.get(
             "http://www.omdbapi.com/",
-            params={"apikey": OMDB_API_KEY, "t": title, "y": year},
+            params={
+                "apikey": OMDB_API_KEY,
+                "t": title,
+                "y": year
+            },
             timeout=6
         )
         data = r.json()
@@ -176,138 +106,134 @@ def get_omdb(title, year):
     except:
         return None
 
-# -------------------------------------------------
-# SCORING ENGINE
-# -------------------------------------------------
 
-def score_movies(df, answers):
+# ==========================
+# SAMPLE MOVIE DATA
+# ==========================
 
-    df = df.copy()
-    df["score"] = 0
+movies = [
+    {"title": "The Dark Knight", "year": 2008},
+    {"title": "La La Land", "year": 2016},
+    {"title": "Prisoners", "year": 2013},
+    {"title": "Knives Out", "year": 2019},
+    {"title": "The Social Network", "year": 2010},
+    {"title": "Interstellar", "year": 2014},
+    {"title": "Parasite", "year": 2019},
+    {"title": "The Prestige", "year": 2006},
+]
 
-    if answers.get("GENRE"):
-        genre = answers["GENRE"].lower()
-        df["score"] += df["Genres"].apply(
-            lambda g: 4 if isinstance(g,str) and genre in g.lower() else 0
-        )
-
-    if answers.get("RUNTIME"):
-        choice = answers["RUNTIME"]
-        df["score"] += df["Runtime"].apply(
-            lambda r: 2 if pd.notna(r) and (
-                (choice=="Under 100 min" and float(r)<100) or
-                (choice=="100-130 min" and 100<=float(r)<=130) or
-                (choice=="Epic" and float(r)>130)
-            ) else 0
-        )
-
-    if answers.get("DISCOVERY") == "Favorites":
-        df["score"] += df["Rating"].apply(
-            lambda r: 3 if pd.notna(r) and float(r)>=4 else 0
-        )
-
-    if answers.get("DISCOVERY") == "Hidden Gems":
-        df["score"] += df["Rating"].apply(
-            lambda r: 2 if pd.notna(r) and 3<=float(r)<4 else 0
-        )
-
-    if answers.get("SURPRISE") == "Yes":
-        df["score"] += df["Rating"].apply(
-            lambda r: 1 if pd.isna(r) else 0
-        )
-
-    return df.sort_values("score", ascending=False)
-
-# -------------------------------------------------
-# SESSION STATE
-# -------------------------------------------------
-
-if "step" not in st.session_state:
-    st.session_state.step = 0
-if "answers" not in st.session_state:
-    st.session_state.answers = {}
-
-# -------------------------------------------------
+# ==========================
 # HEADER
-# -------------------------------------------------
+# ==========================
 
-st.markdown("<h1>The Lindell Movie Selector</h1>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>Answer a few questions and we’ll find something great.</div>", unsafe_allow_html=True)
+st.title("🎬 The Lindell Movie Selector")
+st.write("Answer 18 quick questions and get your perfect movie.")
 
-# -------------------------------------------------
-# QUESTION FLOW
-# -------------------------------------------------
+# ==========================
+# QUESTIONS
+# ==========================
 
-if st.session_state.step < len(questions):
+questions = {
+    "Mood": ["Light", "Intense", "Thought-provoking", "Romantic"],
+    "Pacing": ["Slow burn", "Balanced", "Fast"],
+    "Genre Lean": ["Drama", "Comedy", "Thriller", "Sci-Fi"],
+    "Darkness Level": ["Low", "Medium", "High"],
+    "Foreign Film OK?": ["Yes", "No"],
+    "Oscar Vibes": ["Yes", "No"],
+    "Rewatchable?": ["Yes", "No"],
+    "Plot Twist Desired?": ["Yes", "No"],
+    "Runtime": ["Under 2h", "Over 2h"],
+    "Music Important?": ["Yes", "No"],
+    "Based on True Story?": ["Yes", "No"],
+    "Big Cast?": ["Yes", "No"],
+    "Action Level": ["Low", "Medium", "High"],
+    "Family Friendly?": ["Yes", "No"],
+    "Year Range": ["2000s", "2010s", "2020s"],
+    "Dialogue Heavy?": ["Yes", "No"],
+    "Cinematography Important?": ["Yes", "No"],
+    "Indie Feel?": ["Yes", "No"]
+}
 
-    q_id, label, options = questions[st.session_state.step]
+answers = {}
 
-    st.markdown("<div class='question-card'>", unsafe_allow_html=True)
-    st.markdown(f"### {label}")
-    choice = st.radio("", options)
+with st.form("movie_form"):
+    for q, opts in questions.items():
+        answers[q] = st.radio(q, opts)
 
-    if st.button("Next"):
-        st.session_state.answers[q_id] = choice
-        st.session_state.step += 1
-        st.rerun()
+    submitted = st.form_submit_button("Find My Movie")
 
-    st.markdown("</div>", unsafe_allow_html=True)
+# ==========================
+# RESULTS
+# ==========================
 
-else:
+if submitted:
+    st.divider()
+    st.subheader("Your Top Picks")
 
-    df = pd.read_csv(CSV_FILE)
-    df = normalize_columns(df)
-    df = score_movies(df, st.session_state.answers)
+    selected_movies = np.random.choice(movies, 3, replace=False)
 
-    winners = df.head(3)
+    for movie in selected_movies:
+        title = movie["title"]
+        year = movie["year"]
 
-    for _, row in winners.iterrows():
+        data = get_tmdb_meta(title, year)
+        omdb = get_omdb_data(title, year)
 
-        title = row["Name"]
-        year = row["Year"]
-        lb_rating = row["Rating"]
+        st.markdown(f"## {title} ({year})")
 
-        tmdb = get_tmdb(title, year)
-        omdb = get_omdb(title, year)
-
-        st.markdown("<div class='result-card'>", unsafe_allow_html=True)
-
-        if tmdb and tmdb.get("images", {}).get("posters"):
-            posters = tmdb["images"]["posters"][:3]
+        # Posters
+        if data and data.get("images", {}).get("posters"):
+            posters = data["images"]["posters"][:3]
             cols = st.columns(len(posters))
-            for i in range(len(posters)):
+            for i, poster in enumerate(posters):
                 with cols[i]:
-                    st.image(f"https://image.tmdb.org/t/p/w500{posters[i]['file_path']}")
+                    st.image(
+                        f"https://image.tmdb.org/t/p/w500{poster['file_path']}"
+                    )
 
-        st.markdown(f"### {title}")
-
-        rating_line = []
-
-        if pd.notna(lb_rating):
-            rating_line.append(f"Letterboxd {lb_rating}★")
+        # Ratings
+        rating_bits = []
 
         if omdb:
-            if omdb.get("imdbRating") != "N/A":
-                rating_line.append(f"IMDb {omdb.get('imdbRating')}")
+            imdb_rating = omdb.get("imdbRating")
+            rated = omdb.get("Rated")
 
-            for r in omdb.get("Ratings", []):
-                if r["Source"] == "Rotten Tomatoes":
-                    rating_line.append(f"Rotten Tomatoes {r['Value']}")
+            if imdb_rating and imdb_rating != "N/A":
+                rating_bits.append(
+                    f"<span class='rating-pill'>IMDb {imdb_rating}</span>"
+                )
 
-            if omdb.get("Rated") != "N/A":
-                rating_line.append(omdb.get("Rated"))
+            for source in omdb.get("Ratings", []):
+                if source["Source"] == "Rotten Tomatoes":
+                    rating_bits.append(
+                        f"<span class='rating-pill'>Rotten Tomatoes {source['Value']}</span>"
+                    )
 
-        if year:
-            rating_line.append(str(int(year)))
+            if rated and rated != "N/A":
+                rating_bits.append(
+                    f"<span class='rating-pill'>{rated}</span>"
+                )
 
-        st.markdown(
-            f"<div class='rating-strip'>{' • '.join(rating_line)}</div>",
-            unsafe_allow_html=True
-        )
+        if rating_bits:
+            st.markdown("".join(rating_bits), unsafe_allow_html=True)
 
-        st.markdown("</div>", unsafe_allow_html=True)
+        # Advisory
+        if omdb:
+            runtime = omdb.get("Runtime")
+            awards = omdb.get("Awards")
 
-    if st.button("Start Over"):
-        st.session_state.step = 0
-        st.session_state.answers = {}
-        st.rerun()
+            advisory_lines = []
+
+            if runtime and runtime != "N/A":
+                advisory_lines.append(runtime)
+
+            if awards and awards != "N/A":
+                advisory_lines.append(awards)
+
+            if advisory_lines:
+                st.markdown(
+                    f"<div class='advisory'>{' • '.join(advisory_lines)}</div>",
+                    unsafe_allow_html=True
+                )
+
+        st.divider()
