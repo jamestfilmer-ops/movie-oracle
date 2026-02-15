@@ -13,7 +13,7 @@ st.set_page_config(
     layout="wide"
 )
 
-TMDB_API_KEY = "YOUR_TMDB_KEY_HERE"
+TMDB_API_KEY = "a20688a723e8c7dd1bef2c2cf21ea3eb"
 OMDB_API_KEY = "5d2291bb"
 
 # ==========================
@@ -61,7 +61,7 @@ def get_tmdb_meta(title, year):
         search = requests.get(
             "https://api.themoviedb.org/3/search/movie",
             params={
-                "api_key": a20688a723e8c7dd1bef2c2cf21ea3eb,
+                "api_key": TMDB_API_KEY,
                 "query": title,
                 "year": year
             },
@@ -76,7 +76,7 @@ def get_tmdb_meta(title, year):
         details = requests.get(
             f"https://api.themoviedb.org/3/movie/{movie_id}",
             params={
-                "api_key": a20688a723e8c7dd1bef2c2cf21ea3eb,
+                "api_key": TMDB_API_KEY,
                 "append_to_response": "images"
             },
             timeout=6
@@ -93,7 +93,7 @@ def get_omdb_data(title, year):
         r = requests.get(
             "http://www.omdbapi.com/",
             params={
-                "apikey": 5d2291bb,
+                "apikey": OMDB_API_KEY,
                 "t": title,
                 "y": year
             },
