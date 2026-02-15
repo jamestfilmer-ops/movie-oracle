@@ -1,9 +1,4 @@
-[theme]
-base="light"
-primaryColor="#000000"
-backgroundColor="#f5f5f7"
-secondaryBackgroundColor="#ffffff"
-textColor="#111111"
-font="sans serif"
-
-
+streamlit==1.31.0
+pandas
+requests
+numpy
